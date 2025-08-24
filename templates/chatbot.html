@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Companion Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --primary-color: #3b82f6;
+            --secondary-color: #60a5fa;
+            --bg-color: #f8fafc;
+            --text-color: #1e293b;
+            --bot-bg: #ffffff;
+            --user-bg: #e0f2fe;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .chat-container {
+            height: 80vh;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .bot-message {
+            background-color: var(--bot-bg);
+            border-radius: 12px 12px 12px 0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            word-wrap: break-word; /* Prevents overflow */
+        }
+
+        .user-message {
+            background-color: var(--user-bg);
+            border-radius: 12px 12px 0 12px;
+            word-wrap: break-word; /* Prevents overflow */
+        }
+
+        .typing-indicator span {
+            background-color: var(--secondary-color);
+            animation: bounce 1.5s infinite ease-in-out;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .header-icon {
+            background-color: var(--secondary-color);
+            padding: 8px;
+            border-radius: 12px;
+        }
+
+        .disclaimer {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        /* Basic Markdown Styling */
+        .markdown-content a {
+            color: var(--primary-color);
+            text-decoration: underline;
+        }
+        .markdown-content ul, .markdown-content ol {
+            padding-left: 1.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .markdown-content ul {
+            list-style-type: disc;
+        }
+        .markdown-content ol {
+            list-style-type: decimal;
+        }
+        .markdown-content strong {
+            font-weight: 600;
+        }
+        .markdown-content em {
+            font-style: italic;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <header class="bg-white shadow-sm py-4">
+        <div class="container mx-auto px-4 flex items-center gap-4">
+            <div class="header-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L12 22M2 12L22 12"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-semibold text-gray-800">Health Companion</h1>
+                <p class="text-sm text-gray-600">Your AI-powered health information assistant</p>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 container mx-auto px-4 py-6 flex flex-col">
+        <div class="flex-1 bg-white rounded-lg shadow-sm overflow-hidden flex flex-col">
+            <div id="chatContainer" class="chat-container p-4 space-y-3 flex-1 overflow-y-auto">
+                <div class="bot-message p-4 max-w-[85%]">
+                    <div class="flex items-start gap-2">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="font-medium text-blue-600">Health Companion</div>
+                            <div class="markdown-content mt-1 text-gray-700">
+                                <p>Hello! I'm your Health Companion. I can help you with information about various health conditions, symptoms, and general wellness advice.</p>
+                                <p class="mt-2">I'm not a substitute for professional medical advice, but I can provide general information to help you understand health topics better.</p>
+                                <p class="mt-2">How can I assist you today?</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="typingIndicator" class="hidden px-4 py-2">
+                <div class="flex items-center gap-2">
+                    <div class="typing-indicator flex space-x-1">
+                        <span class="w-2 h-2 rounded-full"></span>
+                        <span class="w-2 h-2 rounded-full"></span>
+                        <span class="w-2 h-2 rounded-full"></span>
+                    </div>
+                    <span class="text-sm text-gray-500">Health Companion is typing...</span>
+                </div>
+            </div>
+
+            <div class="border-t border-gray-200 p-4 bg-gray-50">
+                <div class="flex">
+                    <input
+                        id="userInput"
+                        type="text"
+                        placeholder="Ask about symptoms, conditions, or general health advice..."
+                        class="flex-1 px-4 py-2 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                        id="sendButton"
+                        class="px-4 py-2 rounded-r-lg bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                    >
+                        Send
+                    </button>
+                </div>
+                <p class="disclaimer mt-2">
+                    Note: This bot provides general health information only. Consult a healthcare professional for medical advice.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-gray-200 py-4">
+        <div class="container mx-auto px-4 text-center text-sm text-gray-600">
+            <p>© 2023 Health Companion. Not for medical diagnosis or treatment.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatContainer = document.getElementById('chatContainer');
+            const userInput = document.getElementById('userInput');
+            const sendButton = document.getElementById('sendButton');
+            const typingIndicator = document.getElementById('typingIndicator');
+            
+            // The API key is handled by the Canvas environment, so we leave this empty.
+            const apiKey = "AIzaSyBQ3nTOqc4uqpC_8dW_kYA8zWXN777pHlc";
+            const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent';
+            
+            let chatHistory = [{
+                role: 'user',
+                parts: [{
+                    text: `You are a professional health assistant specializing in human diseases and general wellness. 
+                        Provide clear, concise information about health conditions, symptoms, and wellness tips. 
+                        Always remind users to consult with healthcare professionals for medical advice. 
+                        Be factual and avoid speculative information. 
+                        Format responses with proper markdown formatting for readability.`
+                }]
+            }];
+
+            chatHistory.push({
+                role: 'model',
+                parts: [{
+                    text: `Hello! I'm your Health Companion. I can help you with information about various health conditions, symptoms, and general wellness advice.
+I'm not a substitute for professional medical advice, but I can provide general information to help you understand health topics better.
+How can I assist you today?`
+                }]
+            });
+            
+            function sendMessage() {
+                const message = userInput.value.trim();
+                if (!message) return;
+                
+                addMessage('user', message);
+                
+                chatHistory.push({
+                    role: 'user',
+                    parts: [{ text: message }]
+                });
+
+                userInput.value = '';
+                userInput.disabled = true;
+                sendButton.disabled = true;
+
+                typingIndicator.classList.remove('hidden');
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                
+                queryGemini(chatHistory);
+            }
+            
+            function addMessage(role, content) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `${role}-message p-4 max-w-[85%] ${role === 'user' ? 'ml-auto' : ''}`;
+                
+                const messageContent = `
+                    <div class="flex items-start gap-2 ${role === 'user' ? 'flex-row-reverse' : ''}">
+                        <div class="w-8 h-8 rounded-full ${role === 'user' ? 'bg-blue-200' : 'bg-blue-100'} flex items-center justify-center">
+                            ${role === 'user' ? `
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                                </svg>
+                            ` : `
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
+                                </svg>
+                            `}
+                        </div>
+                        <div>
+                            <div class="font-medium ${role === 'user' ? 'text-blue-700' : 'text-blue-600'}">
+                                ${role === 'user' ? 'You' : 'Health Companion'}
+                            </div>
+                            <div class="mt-1 text-gray-700 markdown-content">${formatMarkdown(content)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                messageDiv.innerHTML = messageContent;
+                chatContainer.appendChild(messageDiv);
+                
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+            
+            function formatMarkdown(text) {
+                // Ensure a temporary element is used for rendering to prevent XSS.
+                const tempDiv = document.createElement('div');
+                tempDiv.innerText = text;
+                let formattedText = tempDiv.innerHTML;
+
+                // Escape special characters for the regular expressions to work correctly.
+                formattedText = formattedText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                
+                // Replace incorrect regex patterns with correct ones
+                // Bold (**text** or __text__)
+                formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                formattedText = formattedText.replace(/__(.*?)__/g, '<strong>$1</strong>');
+                
+                // Italics (*text* or _text_)
+                formattedText = formattedText.replace(/\*(.*?)\*/g, '<em>$1</em>');
+                formattedText = formattedText.replace(/_(.*?)_/g, '<em>$1</em>');
+                
+                // Links ([text](url))
+                formattedText = formattedText.replace(/\[([^\]]+?)\]\(([^)]+?)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+                // Headings
+                formattedText = formattedText.replace(/^###\s(.+)/gm, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>');
+                formattedText = formattedText.replace(/^##\s(.+)/gm, '<h2 class="text-xl font-bold mt-4 mb-2">$1</h2>');
+                formattedText = formattedText.replace(/^#\s(.+)/gm, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>');
+                
+                // Bullet points
+                formattedText = formattedText.replace(/^\s*([*-])\s(.+)/gm, '<li>$2</li>');
+                formattedText = formattedText.replace(/(<li>.*<\/li>(\n|$))+/g, '<ul class="list-disc ml-4 my-2">$1</ul>');
+
+                // Numbered lists
+                formattedText = formattedText.replace(/^\s*(\d+\.)\s(.+)/gm, '<li>$2</li>');
+                formattedText = formattedText.replace(/(<li>.*<\/li>(\n|$))+/g, '<ol class="list-decimal ml-4 my-2">$1</ol>');
+                
+                // Code blocks (```code```)
+                formattedText = formattedText.replace(/```([\s\S]+?)```/g, '<pre class="bg-gray-100 p-2 rounded-lg mt-2 overflow-x-auto"><code class="text-sm">$1</code></pre>');
+                
+                // Inline code (`code`)
+                formattedText = formattedText.replace(/`([^`]+?)`/g, '<code class="bg-gray-100 text-sm px-1 py-0.5 rounded">$1</code>');
+                
+                // Paragraphs and line breaks
+                formattedText = formattedText.split('\n').map(line => {
+                    if (line.trim() === '' || line.startsWith('<li>') || line.startsWith('<h') || line.startsWith('<pre')) {
+                        return line;
+                    } else {
+                        return `<p>${line}</p>`;
+                    }
+                }).join('');
+
+                return formattedText;
+            }
+            
+            async function queryGemini(history, retries = 0) {
+                const MAX_RETRIES = 5;
+                const baseDelay = 1000;
+
+                try {
+                    const payload = { contents: history };
+                    const apiUrl = `${API_URL}?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && retries < MAX_RETRIES) {
+                            const delay = baseDelay * Math.pow(2, retries) + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            return queryGemini(history, retries + 1);
+                        } else {
+                            throw new Error(`API call failed with status: ${response.status}`);
+                        }
+                    }
+
+                    const data = await response.json();
+                    
+                    if (data.candidates && data.candidates[0].content.parts) {
+                        const botResponse = data.candidates[0].content.parts[0].text;
+                        addMessage('bot', botResponse);
+                        chatHistory.push({
+                            role: 'model',
+                            parts: [{ text: botResponse }]
+                        });
+                    } else {
+                        addMessage('bot', "I'm sorry, I couldn't process that request. Please try again.");
+                    }
+                } catch (error) {
+                    console.error('Error calling Gemini API:', error);
+                    addMessage('bot', "Sorry, there was an error processing your request. Please try again later.");
+                } finally {
+                    typingIndicator.classList.add('hidden');
+                    userInput.disabled = false;
+                    sendButton.disabled = false;
+                    userInput.focus();
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
+            
+            sendButton.addEventListener('click', sendMessage);
+            
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            
+            userInput.focus();
+        });
+    </script>
+</body>
+</html>

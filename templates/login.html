@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+    <style>
+      body { background: #f0f4f8; font-family: Arial; display:flex; height:100vh; justify-content:center; align-items:center; margin:0; }
+      .container { background:white; padding:30px 40px; border-radius:10px; box-shadow:0 8px 16px rgba(0,0,0,0.15); width:320px; text-align:center; }
+      input, button { width: 100%; padding:10px; margin:10px 0; border-radius:5px; border:1.5px solid #ccc; font-size:14px; }
+      button { background:#28a745; color:white; font-weight:bold; border:none; cursor:pointer; }
+      button:hover { background:#19692c; }
+      p a { color:#28a745; text-decoration:none; font-weight:bold; }
+      ul { color:#d9534f; font-weight:bold; padding:0; list-style:none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Login</h2>
+        <form method="POST" action="{{ url_for('login') }}">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+        <p>Don't have an account? <a href="{{ url_for('signup') }}">Sign up</a></p>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <ul>
+              {% for msg in messages %}
+                <li>{{ msg }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+    </div>
+</body>
+</html>

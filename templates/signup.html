@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Signup</title>
+    <style>
+      body { background:#f0f4f8; font-family: Arial; display:flex; height:100vh; justify-content:center; align-items:center; margin:0; }
+      .container { background:white; padding:30px 40px; border-radius:10px; box-shadow:0 8px 16px rgba(0,0,0,0.15); width:320px; text-align:center; }
+      input, button { width: 100%; padding:10px; margin:10px 0; border-radius:5px; border:1.5px solid #ccc; font-size:14px; }
+      button { background:#007BFF; color:white; font-weight:bold; border:none; cursor:pointer; }
+      button:hover { background:#0056b3; }
+      p a { color:#007BFF; text-decoration:none; font-weight:bold; }
+      ul { color:#d9534f; font-weight:bold; padding:0; list-style:none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Signup</h2>
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <ul>
+              {% for message in messages %}
+                <li>{{ message }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('signup') }}">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="password" name="confirm_password" placeholder="Confirm Password" required>
+            <button type="submit">Signup</button>
+        </form>
+        <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a>.</p>
+    </div>
+</body>
+</html>

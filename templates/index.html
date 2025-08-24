@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Disease Detection System</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f4f8;
+      margin: 0;
+      padding: 40px 15px;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+      color: #222;
+    }
+    .container {
+      background: #fff;
+      max-width: 700px;
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      padding: 30px 40px 40px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #007b5e;
+      letter-spacing: 1.1px;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .tab {
+      padding: 12px 30px;
+      margin: 0 10px;
+      cursor: pointer;
+      font-weight: 600;
+      border-bottom: 3px solid transparent;
+      color: #444;
+      transition: all 0.3s ease;
+      border-radius: 6px 6px 0 0;
+    }
+    .tab:hover {
+      background-color: #e8f1ef;
+      color: #007b5e;
+    }
+    .tab.active {
+      border-color: #007b5e;
+      color: #007b5e;
+      background-color: #dff2e9;
+      font-weight: 700;
+    }
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.4s ease forwards;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #444;
+    }
+    input[type="file"],
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 14px;
+      margin-bottom: 18px;
+      border-radius: 6px;
+      border: 1.8px solid #ccc;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #007b5e;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #005f47;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      background: #e1f3e7;
+      color: #004d40;
+      min-height: 48px;
+    }
+    .error {
+      background: #fdecea;
+      color: #c62828;
+    }
+    .preview-img {
+      max-width: 200px;
+      margin-top: 15px;
+      border-radius: 8px;
+      border: 2px solid #ccc;
+      display: block;
+    }
+    ul {
+      padding-left: 18px;
+      color: #555;
+      font-weight: 500;
+    }
+    @keyframes fadeIn {
+      from {opacity: 0;}
+      to {opacity: 1;}
+    }
+    .top-bar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+    }
+    .logout-btn {
+      background-color: #c62828;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    .logout-btn:hover {
+      background-color: #a61c1c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top-bar">
+      <a href="{{ url_for('logout') }}"><button class="logout-btn">Logout</button></a>
+    </div>
+
+    <div class="top-bar">
+      <a href="{{ url_for('chatbot') }}" class="btn btn-primary">Open Chatbot</a>
+    </div>
+
+    <h1>Disease Detection System</h1>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="imageTab">Skin Disease Detection</div>
+      <div class="tab" data-tab="symptomTab">Symptom-Based Detection</div>
+    </div>
+
+    <section id="imageTab" class="tab-content active">
+      <label for="skinImage">Upload Skin Image:</label>
+      <input type="file" id="skinImage" accept="image/*" />
+      <button onclick="detectFromImage()">Detect from Image</button>
+
+      <div id="imageResult" class="result">
+        No prediction yet.
+        <img id="uploadedPreview" class="preview-img" src="" alt="" style="display:none;">
+      </div>
+
+      <h3 style="margin-top: 30px; color:#007b5e;">Detectable Skin Diseases:</h3>
+      <ul>
+        <li>Eczema</li>
+        <li>Warts Molluscum</li>
+        <li>Atopic Dermatitis</li>
+        <li>Basal Cell Carcinoma</li>
+        <li>Melanocytic Nevi</li>
+      </ul>
+    </section>
+
+    <section id="symptomTab" class="tab-content">
+      <label for="symptomsInput">Enter Symptoms (comma-separated):</label>
+      <input type="text" id="symptomsInput" placeholder="e.g. itching, sleeping" />
+      <button onclick="predictFromSymptoms()">Predict from Symptoms</button>
+
+      <div id="symptomResult" class="result">No prediction yet.</div>
+    </section>
+  </div>
+
+<script>
+  // Tab switching logic
+  const tabs = document.querySelectorAll('.tab');
+  const contents = document.querySelectorAll('.tab-content');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      contents.forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  function detectFromImage() {
+    const fileInput = document.getElementById('skinImage');
+    const resultDiv = document.getElementById('imageResult');
+    const previewImg = document.getElementById('uploadedPreview');
+    const file = fileInput.files[0];
+
+    if (!file) {
+      resultDiv.textContent = "Please select an image file.";
+      resultDiv.className = 'result error';
+      previewImg.style.display = 'none';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    resultDiv.textContent = "Processing image...";
+    resultDiv.className = 'result';
+    previewImg.style.display = 'none';
+
+    fetch('/predict_image', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        resultDiv.textContent = "Error: " + data.error;
+        if(data.details) {
+          resultDiv.textContent += "\nDetails: " + data.details;
+        }
+        resultDiv.className = 'result error';
+        previewImg.style.display = 'none';
+      } else {
+        resultDiv.innerHTML = `Prediction: ${data.prediction}<br/>Confidence: ${data.confidence}%`;
+        resultDiv.className = 'result';
+        if (data.image_url) {
+          previewImg.src = data.image_url;
+          previewImg.style.display = 'block';
+          resultDiv.appendChild(previewImg);
+        }
+      }
+    })
+    .catch(err => {
+      resultDiv.textContent = "Error occurred during prediction.";
+      resultDiv.className = 'result error';
+      previewImg.style.display = 'none';
+      console.error(err);
+    });
+  }
+
+  function predictFromSymptoms() {
+    const symptomsInput = document.getElementById('symptomsInput').value.trim();
+    const resultDiv = document.getElementById('symptomResult');
+
+    if (!symptomsInput) {
+      resultDiv.textContent = "Please enter some symptoms.";
+      resultDiv.className = 'result error';
+      return;
+    }
+
+    resultDiv.textContent = "Processing symptoms...";
+    resultDiv.className = 'result';
+
+    fetch('/predict_symptoms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symptoms: symptomsInput })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        resultDiv.textContent = "Error: " + data.error;
+        if(data.details) {
+          resultDiv.textContent += "\nDetails: " + data.details;
+        }
+        resultDiv.className = 'result error';
+      } else {
+        resultDiv.innerHTML = `<strong>Disease:</strong> ${data.disease}<br/><strong>Precautions:</strong> ${data.precautions}`;
+        resultDiv.className = 'result';
+      }
+    })
+    .catch(err => {
+      resultDiv.textContent = "Error occurred during prediction.";
+      resultDiv.className = 'result error';
+      console.error(err);
+    });
+  }
+</script>
+
+</body>
+</html>
