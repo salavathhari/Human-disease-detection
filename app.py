@@ -1,4 +1,5 @@
 import os
+os.environ["STREAMLIT_CONFIG_DIR"] = ".streamlit"
 import sqlite3
 import traceback
 import numpy as np
@@ -213,4 +214,3 @@ else:
                 st.markdown(f"**🧑 You:** {msg}")
             else:
                 st.markdown(f"**🤖 Bot:** {msg}")
-
