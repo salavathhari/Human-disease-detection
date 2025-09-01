@@ -3,22 +3,12 @@ import sqlite3
 import traceback
 import numpy as np
 import joblib
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import streamlit as st
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing import image
 
-app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'  # Change this!
-
-# Flask-Login setup
-login_manager = LoginManager()
-login_manager.login_view = 'login'
-login_manager.init_app(app)
-
-# Database setup for users
+# ----------------- Database Setup -----------------
 DB_FILE = 'users.db'
 
 def init_db():
@@ -32,31 +22,36 @@ def init_db():
             )
         ''')
         conn.commit()
-
 init_db()
 
-class User(UserMixin):
-    def __init__(self, id_, username, password):
-        self.id = id_
-        self.username = username
-        self.password = password
+# ----------------- User Functions -----------------
+def signup_user(username, password):
+    hashed = generate_password_hash(password)
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed))
+            conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
 
-@login_manager.user_loader
-def load_user(user_id):
+def login_user(username, password):
     with sqlite3.connect(DB_FILE) as conn:
         c = conn.cursor()
-        c.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+        c.execute("SELECT * FROM users WHERE username=?", (username,))
         row = c.fetchone()
-    if row:
-        return User(row[0], row[1], row[2])
-    return None
+    if row and check_password_hash(row[2], password):
+        return True
+    return False
 
-# Load image classification model
+# ----------------- Load Models -----------------
 SKIN_MODEL_PATH = os.path.join("model", "skin2.keras")
 if not os.path.exists(SKIN_MODEL_PATH):
-    raise FileNotFoundError(f"Skin model file not found at {SKIN_MODEL_PATH}")
-skin_model = load_model(SKIN_MODEL_PATH)
-HEIGHT, WIDTH = skin_model.input_shape[1], skin_model.input_shape[2]
+    st.error(f"Skin model file not found at {SKIN_MODEL_PATH}")
+else:
+    skin_model = load_model(SKIN_MODEL_PATH)
+    HEIGHT, WIDTH = skin_model.input_shape[1], skin_model.input_shape[2]
 
 disease_labels = [
     'Eczema',
@@ -66,155 +61,44 @@ disease_labels = [
     'Melanocytic Nevi'
 ]
 
-# Load symptom prediction model and precautions
 SYMPTOM_MODEL_PATH = 'disease_precaution_model.pkl'
-if not os.path.exists(SYMPTOM_MODEL_PATH):
-    raise FileNotFoundError(f"Symptom model file not found at {SYMPTOM_MODEL_PATH}")
+if os.path.exists(SYMPTOM_MODEL_PATH):
+    loaded_obj = joblib.load(SYMPTOM_MODEL_PATH)
+    symptom_model = loaded_obj.get('model')
+    precautions_map = loaded_obj.get('precautions')
+else:
+    symptom_model = None
+    precautions_map = {}
 
-loaded_obj = joblib.load(SYMPTOM_MODEL_PATH)
-symptom_model = loaded_obj.get('model')
-precautions_map = loaded_obj.get('precautions')
-
-if symptom_model is None or precautions_map is None:
-    raise ValueError("Symptom model or precautions missing in loaded object")
-
-# Folder for uploaded images
-STATIC_UPLOAD_FOLDER = os.path.join('static', 'uploads')
-os.makedirs(STATIC_UPLOAD_FOLDER, exist_ok=True)
-
-# ---------- Routes ----------
-
-@app.route('/')
-@login_required
-def root():
-    return redirect(url_for('home'))
-
-@app.route('/home')
-@login_required
-def home():
-    return render_template('index.html')
-
-@app.route('/chatbot')
-@login_required
-def chatbot():
-    return render_template('chatbot.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-
-        with sqlite3.connect(DB_FILE) as conn:
-            c = conn.cursor()
-            c.execute('SELECT * FROM users WHERE username = ?', (username,))
-            user = c.fetchone()
-
-        if user and check_password_hash(user[2], password):
-            login_user(User(user[0], user[1], user[2]))
-            flash("Logged in successfully!")
-            return redirect(url_for('home'))
-        else:
-            flash("Invalid username or password.")
-    return render_template('login.html')
-
-@app.route('/signup', methods=['GET', 'POST'])
-def signup():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-
-        if not username or not password or not confirm_password:
-            flash("Please fill all the fields.")
-            return redirect(url_for('signup'))
-
-        if password != confirm_password:
-            flash("Passwords do not match.")
-            return redirect(url_for('signup'))
-
-        hashed_password = generate_password_hash(password)
-
-        try:
-            with sqlite3.connect(DB_FILE) as conn:
-                c = conn.cursor()
-                c.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_password))
-                conn.commit()
-            flash("Signup successful! Please log in.")
-            return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
-            flash("Username already exists.")
-            return redirect(url_for('signup'))
-    return render_template('signup.html')
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash("Logged out successfully.")
-    return redirect(url_for('login'))
-
-@app.route('/predict_image', methods=['POST'])
-@login_required
-def predict_image():
+# ----------------- Helper Functions -----------------
+def predict_skin_disease(uploaded_file):
     try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image uploaded'})
-
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'Empty filename'})
-
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(STATIC_UPLOAD_FOLDER, filename)
-        file.save(filepath)
-
-        img = image.load_img(filepath, target_size=(HEIGHT, WIDTH))
+        img = image.load_img(uploaded_file, target_size=(HEIGHT, WIDTH))
         img_array = image.img_to_array(img) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
 
         preds = skin_model.predict(img_array)
-        if preds.shape[1] != len(disease_labels):
-            return jsonify({'error': 'Prediction output size mismatch.'})
-
         confidence = float(np.max(preds)) * 100
         predicted_index = np.argmax(preds)
 
         THRESHOLD = 20
         if confidence < THRESHOLD:
-            predicted_class = "No disease detected"
+            return "No disease detected", confidence
         else:
-            predicted_class = disease_labels[predicted_index]
-
-        return jsonify({
-            'prediction': predicted_class,
-            'confidence': round(confidence, 2),
-            'image_url': url_for('static', filename=f'uploads/{filename}')
-        })
-
+            return disease_labels[predicted_index], confidence
     except Exception:
-        tb = traceback.format_exc()
-        print("Error during image prediction:", tb)
-        return jsonify({'error': 'Internal error during image prediction', 'details': tb})
+        return "Error in prediction", 0
 
-@app.route('/predict_symptoms', methods=['POST'])
-@login_required
-def predict_symptoms():
+def predict_symptoms(symptoms_text):
     try:
-        data = request.get_json()
-        if not data or 'symptoms' not in data:
-            return jsonify({'error': 'No symptoms provided'})
-
-        symptoms_text = data['symptoms']
         symptoms_list = [s.strip().lower() for s in symptoms_text.split(',') if s.strip()]
         if not symptoms_list:
-            return jsonify({'error': 'Empty symptoms list'})
+            return "Error: Empty symptoms list", "No precautions"
 
         if not hasattr(symptom_model, 'feature_names_in_'):
-            return jsonify({'error': 'Symptom model missing feature names'})
+            return "Error: Symptom model missing features", "No precautions"
 
         feature_names = symptom_model.feature_names_in_
-
         input_vector = np.zeros(len(feature_names))
         for i, feature in enumerate(feature_names):
             if feature.lower() in symptoms_list:
@@ -222,18 +106,111 @@ def predict_symptoms():
 
         input_vector = input_vector.reshape(1, -1)
         disease_pred = symptom_model.predict(input_vector)[0]
-
         precautions = precautions_map.get(disease_pred, "No precautions available.")
 
-        return jsonify({
-            'disease': disease_pred,
-            'precautions': precautions
-        })
+        return disease_pred, precautions
+    except Exception as e:
+        return f"Error: {str(e)}", "No precautions"
 
-    except Exception:
-        tb = traceback.format_exc()
-        print("Error during symptom prediction:", tb)
-        return jsonify({'error': 'Internal error during symptom prediction', 'details': tb})
+# ----------------- Streamlit UI -----------------
+st.set_page_config(page_title="Medical Assistant", layout="wide")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Session state for login
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+st.title("🩺 Medical Assistant")
+
+# ----------- Login / Signup -----------
+if not st.session_state.logged_in:
+    choice = st.sidebar.radio("Menu", ["Login", "Signup"])
+
+    if choice == "Login":
+        st.subheader("Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if login_user(username, password):
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.success(f"Welcome {username}!")
+            else:
+                st.error("Invalid username or password")
+
+    elif choice == "Signup":
+        st.subheader("Create an Account")
+        username = st.text_input("Choose a Username")
+        password = st.text_input("Password", type="password")
+        confirm = st.text_input("Confirm Password", type="password")
+        if st.button("Signup"):
+            if not username or not password:
+                st.warning("Please fill all fields")
+            elif password != confirm:
+                st.error("Passwords do not match")
+            else:
+                if signup_user(username, password):
+                    st.success("Signup successful! Please login.")
+                else:
+                    st.error("Username already exists.")
+
+# ----------- Main App -----------
+else:
+    st.sidebar.success(f"Logged in as {st.session_state.username}")
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.experimental_rerun()
+
+    tab1, tab2, tab3 = st.tabs([
+        "🖼 Skin Disease Prediction",
+        "📝 Symptom Checker",
+        "💬 Chatbot"
+    ])
+
+    with tab1:
+        st.subheader("Upload a Skin Image")
+        uploaded_file = st.file_uploader("Choose an image", type=["jpg", "png", "jpeg"])
+        if uploaded_file:
+            st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
+            if st.button("Predict Disease"):
+                pred, conf = predict_skin_disease(uploaded_file)
+                st.success(f"Prediction: {pred} (Confidence: {conf:.2f}%)")
+
+    with tab2:
+        st.subheader("Enter Symptoms (comma-separated)")
+        symptoms_text = st.text_area("Example: itching, skin rash, nodal skin eruptions")
+        if st.button("Predict from Symptoms"):
+            disease, precautions = predict_symptoms(symptoms_text)
+            st.success(f"Predicted Disease: {disease}")
+            st.info(f"Precautions: {precautions}")
+
+    with tab3:
+        st.subheader("Chatbot 🤖")
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        user_input = st.text_input("You:", key="chat_input")
+        if st.button("Send"):
+            if user_input:
+                # Simple rule-based response for now
+                if "hello" in user_input.lower():
+                    bot_response = "Hi there! How can I help you today?"
+                elif "symptom" in user_input.lower():
+                    bot_response = "You can use the Symptom Checker tab to predict diseases."
+                elif "skin" in user_input.lower():
+                    bot_response = "Upload your skin image in the Skin Disease Prediction tab."
+                else:
+                    bot_response = "I'm just a simple chatbot here to assist you."
+
+                st.session_state.chat_history.append(("You", user_input))
+                st.session_state.chat_history.append(("Bot", bot_response))
+
+        # Display chat history
+        for sender, msg in st.session_state.chat_history:
+            if sender == "You":
+                st.markdown(f"**🧑 You:** {msg}")
+            else:
+                st.markdown(f"**🤖 Bot:** {msg}")
+
